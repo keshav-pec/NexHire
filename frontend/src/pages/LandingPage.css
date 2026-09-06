@@ -1,0 +1,246 @@
+.dashboard-page {
+  padding-top: 120px;
+  padding-bottom: 60px;
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+.dashboard-content {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Hero Section */
+.hero-section {
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hero-title {
+  font-size: 4.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #1A202C;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.hero-subtitle {
+  font-size: 1.15rem;
+  color: #64748B;
+  line-height: 1.6;
+  max-width: 650px;
+  margin: 0 auto 40px;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 40px; /* Reduced from 80px */
+}
+
+.hero-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px var(--primary-glow);
+}
+
+.btn-outline {
+  background: white;
+  color: #1A202C;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.btn-outline:hover {
+  border-color: #CBD5E1;
+  background: #F8FAFC;
+}
+
+/* Floating UI Illustrations */
+.hero-illustration {
+  position: relative;
+  height: 250px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  margin-top: 20px;
+}
+
+/* Mascot (CSS Approx) */
+.mascot-container {
+  position: relative;
+  z-index: 10;
+  /* Scaled up as requested */
+  transform: scale(1.1);
+  transform-origin: bottom center;
+}
+
+.mascot-body {
+  width: 180px;
+  height: 180px;
+  background: var(--primary);
+  border-radius: 50% 50% 0 0;
+  position: relative;
+  border: 12px solid white;
+  border-bottom: none;
+}
+
+.mascot-face {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 100px;
+  background: white;
+  border-radius: 50% 50% 0 0;
+}
+
+.mascot-eye {
+  width: 12px;
+  height: 12px;
+  background: #1A202C;
+  border-radius: 50%;
+  position: absolute;
+  top: 40px;
+}
+
+.mascot-eye.left { left: 35px; }
+.mascot-eye.right { right: 35px; }
+
+.mascot-beak {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 10px solid #F59E0B;
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.mascot-headset {
+  position: absolute;
+  top: 50px;
+  left: -20px;
+  right: -20px;
+  height: 80px;
+  border: 8px solid #475569;
+  border-bottom: none;
+  border-radius: 100px 100px 0 0;
+}
+
+.mascot-headset::before,
+.mascot-headset::after {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  width: 30px;
+  height: 30px;
+  background: #64748B;
+  border-radius: 50%;
+}
+
+.mascot-headset::before { left: -15px; }
+.mascot-headset::after { right: -15px; }
+
+/* Guide Section */
+.guide-section {
+  padding: 80px 24px;
+  background: var(--bg-secondary);
+  margin-top: 40px;
+}
+
+.guide-content {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.guide-title {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #1A202C;
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.guide-card {
+  padding: 32px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.guide-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  color: var(--primary-dark);
+  font-size: 1.25rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.guide-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #1A202C;
+  margin-bottom: 12px;
+}
+
+.guide-card p {
+  color: #64748B;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+@media (max-width: 768px) {
+  .hero-title { font-size: 2.8rem; }
+  .hero-actions { flex-direction: column; }
+  .hero-btn { width: 100%; justify-content: center; }
+  .guide-grid { grid-template-columns: 1fr; }
+}
