@@ -8,26 +8,17 @@
 const GEMINI_MODEL = 'gemini-3.1-flash-live-preview';
 
 function buildSystemPrompt(config) {
-  return `You are a professional AI interviewer conducting a mock job interview. Your persona is warm yet professional — think of a senior hiring manager who genuinely wants to help candidates succeed.
-
-INTERVIEW CONTEXT:
-- Target Company: ${config.company}
-- Target Role: ${config.role}
-- Candidate's Skills & Background: ${config.skills}
+  return `You are a warm, professional AI interviewer for ${config.company}. You are interviewing the candidate for the following role: ${config.role}.
+Candidate's Skills: ${config.skills}.
 
 INTERVIEW RULES:
-1. Start by warmly greeting the candidate and asking them to introduce themselves.
-2. After the introduction, ask 3–5 targeted questions that are specific to the company and role.
-3. Base follow-up questions on what the candidate says — listen actively and dig deeper.
-4. Keep your responses concise (2–3 sentences max per turn) — this is a conversation, not a lecture.
-5. Be encouraging but honest. If an answer is vague, gently probe for specifics.
-6. After the questions, thank the candidate and end the interview naturally.
-7. This is EVALUATION MODE only — do not provide feedback during the interview.
+1. Greet the candidate and ask for a brief introduction.
+2. Ask 3-5 targeted questions specific to the role. Listen actively and ask follow-up questions.
+3. Keep your responses concise (max 2-3 sentences). This is a conversation.
+4. This is EVALUATION MODE. Do NOT provide feedback during the interview.
+5. Once all questions are asked, thank the candidate and end naturally.
 
-VOICE & TONE:
-- Speak naturally and conversationally, as if in a real video call.
-- Use brief acknowledgments like "Great," "I see," "That's interesting" to keep flow natural.
-- Avoid overly formal or robotic phrasing.`;
+Speak naturally and conversationally.`;
 }
 
 export class GeminiLiveService {
@@ -48,6 +39,12 @@ export class GeminiLiveService {
     this._volumeLevel = 0;
     this._nextPlayTime = 0;
     this.onVolumeChange = null;
+    this._currentAiText = '';
+    this._aiMuted = false;
+  }
+
+  setAiMuted(muted) {
+    this._aiMuted = muted;
   }
 
   async connect(apiKey, config) {
@@ -155,24 +152,33 @@ export class GeminiLiveService {
   }
 
   _handleMessage(message) {
+    let audioPlayed = false;
+
     if (message.data) {
-      // Handle audio data from the model
-      const audioData = message.data;
-      if (audioData) {
-        this._playAudio(audioData);
-      }
+      this._playAudio(message.data);
+      audioPlayed = true;
     }
-    
-    // Extract text from the model's response if available
+
+    // Extract text and audio from the model's response if available
     const parts = message.serverContent?.modelTurn?.parts;
     if (parts && Array.isArray(parts)) {
-      const textParts = parts.filter(p => p.text).map(p => p.text).join(' ');
-      if (textParts && textParts.trim().length > 0) {
-        this.onTranscript?.('ai', textParts.trim());
+      for (const part of parts) {
+        if (part.text) {
+          this._currentAiText = (this._currentAiText || '') + part.text;
+          this.onLiveCaption?.('ai', this._currentAiText);
+        }
+        if (!audioPlayed && part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
+          this._playAudio(part.inlineData.data);
+        }
       }
     }
 
     if (message.serverContent?.turnComplete) {
+      if (this._currentAiText && this._currentAiText.trim().length > 0) {
+        this.onTranscript?.('ai', this._currentAiText.trim());
+      }
+      this._currentAiText = '';
+      this.onLiveCaption?.('ai', '');
       this._isSpeaking = false;
       this._volumeLevel = 0;
       this._nextPlayTime = 0;
@@ -216,7 +222,10 @@ export class GeminiLiveService {
 
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(this.audioContext.destination);
+      
+      if (!this._aiMuted) {
+        source.connect(this.audioContext.destination);
+      }
 
       // Schedule sequentially — each chunk plays AFTER the previous one
       const now = this.audioContext.currentTime;

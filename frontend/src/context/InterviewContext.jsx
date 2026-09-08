@@ -7,16 +7,7 @@ export function InterviewProvider({ children }) {
   const [interviewConfig, setInterviewConfig] = useState(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
 
-  /** Called from OnboardingPage — creates a session on the backend */
   const setConfig = useCallback(async (config) => {
-    setInterviewConfig({
-      company: config.company,
-      role: config.role,
-      skills: config.skills,
-      startedAt: new Date().toISOString(),
-    });
-
-    // Persist session to MongoDB (fire-and-forget; non-blocking)
     try {
       const res = await client.post('/interviews', {
         company: config.company,
@@ -24,8 +15,16 @@ export function InterviewProvider({ children }) {
         skills: config.skills,
       });
       setActiveSessionId(res.data.interview._id);
+      
+      setInterviewConfig({
+        company: config.company,
+        role: config.role,
+        skills: config.skills,
+        startedAt: new Date().toISOString(),
+      });
     } catch (err) {
-      console.warn('[InterviewContext] Failed to create session record:', err.message);
+      console.error('[InterviewContext] Failed to create session record:', err.message);
+      throw new Error('Failed to initialize interview session. Please try again.');
     }
   }, []);
 

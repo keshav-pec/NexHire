@@ -36,8 +36,13 @@ export default function OnboardingPage() {
     } else {
       // Final step — start the interview
       setLoading(true);
-      await setConfig({ company, role, skills });
-      navigate('/interview');
+      try {
+        await setConfig({ company, role, skills });
+        navigate('/interview');
+      } catch (err) {
+        setError(err.message || 'Failed to connect. Please try again.');
+        setLoading(false);
+      }
     }
   };
 
@@ -46,7 +51,7 @@ export default function OnboardingPage() {
       setStep(step - 1);
       setError('');
     } else {
-      navigate('/dashboard');
+      navigate('/');
     }
   };
 

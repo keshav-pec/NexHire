@@ -470,3 +470,67 @@
   }
 }
 
+
+/* Live Captions */
+.live-caption-overlay {
+  position: absolute;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.live-caption-text {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 800px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  animation: fadeIn 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-caption-overlay {
+  bottom: 12px;
+}
+
+.user-caption {
+  font-size: 0.9rem;
+  padding: 6px 10px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Global Captions */
+.global-captions-container {
+  position: absolute;
+  bottom: 80px; /* Above the bottom control bar */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.global-captions-container .live-caption-overlay {
+  position: static;
+  width: 100%;
+  transform: none;
+}

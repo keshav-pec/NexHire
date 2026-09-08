@@ -27,6 +27,7 @@ export default function InterviewRoom() {
 
   const [interviewState, setInterviewState] = useState(INTERVIEW_STATES.SETUP);
   const [isMuted, setIsMuted] = useState(false);
+  const [isAiMuted, setIsAiMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isViewSwapped, setIsViewSwapped] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -36,11 +37,14 @@ export default function InterviewRoom() {
   const [transcript, setTranscript] = useState([]);
   const transcriptRef = useRef([]);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [aiCaption, setAiCaption] = useState(null);
+  const [userCaption, setUserCaption] = useState(null);
 
   const videoRef = useRef(null);
   const cameraStreamRef = useRef(null);
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
+  const isInterviewActiveRef = useRef(false);
 
   // Redirect if no interview config
   useEffect(() => {
@@ -49,19 +53,18 @@ export default function InterviewRoom() {
     }
   }, [interviewConfig, isGeneratingReport, navigate]);
 
+  // ─── Setup camera & mic ──────────────────────────────────
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
-        audio: false,
+        video: { width: 1280, height: 720, facingMode: 'user' },
       });
-      cameraStreamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
+      cameraStreamRef.current = stream;
     } catch (err) {
-      console.warn('Camera not available:', err);
-      setIsCameraOn(false);
+      console.error('Camera error:', err);
     }
   };
 
@@ -91,25 +94,39 @@ export default function InterviewRoom() {
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
-      recognition.interimResults = false;
+      recognition.interimResults = true; // live captions
       recognition.lang = 'en-US';
       
       recognition.onresult = (event) => {
-        const lastResult = event.results[event.results.length - 1];
-        if (lastResult.isFinal) {
-          const text = lastResult[0].transcript.trim();
-          if (text) {
-            setTranscript(prev => {
-              const newT = [...prev, { role: 'user', text }];
-              transcriptRef.current = newT;
-              return newT;
-            });
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            const text = event.results[i][0].transcript.trim();
+            if (text) {
+              setTranscript(prev => {
+                const newT = [...prev, { role: 'user', text }];
+                transcriptRef.current = newT;
+                return newT;
+              });
+            }
+            setUserCaption(null); // clear user caption on final
+          } else {
+            interimTranscript += event.results[i][0].transcript;
           }
+        }
+        if (interimTranscript) {
+          setUserCaption(interimTranscript);
         }
       };
       
       recognition.onend = () => {
-        // Automatically restart if interview is active, handled via state if needed
+        if (isInterviewActiveRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.warn('SpeechRecognition restart error:', e);
+          }
+        }
       };
       
       recognitionRef.current = recognition;
@@ -119,7 +136,10 @@ export default function InterviewRoom() {
       stopCamera();
       resetGeminiService();
       if (timerRef.current) clearInterval(timerRef.current);
-      if (recognitionRef.current) recognitionRef.current.stop();
+      isInterviewActiveRef.current = false;
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
     };
   }, []);
 
@@ -165,6 +185,13 @@ export default function InterviewRoom() {
         return newT;
       });
     };
+    service.onLiveCaption = (role, text) => {
+      if (text) {
+        setAiCaption(text);
+      } else {
+        setAiCaption(null);
+      }
+    };
     service.onError = (msg) => {
       setError(msg);
     };
@@ -181,6 +208,7 @@ export default function InterviewRoom() {
       return;
     }
 
+    isInterviewActiveRef.current = true;
     await service.startMicrophone();
     if (recognitionRef.current) {
       try { recognitionRef.current.start(); } catch (e) { console.warn(e); }
@@ -193,6 +221,7 @@ export default function InterviewRoom() {
 
   const endInterview = useCallback(async () => {
     setIsGeneratingReport(true);
+    isInterviewActiveRef.current = false;
     const service = getGeminiService();
     await service.disconnect();
     if (timerRef.current) clearInterval(timerRef.current);
@@ -202,15 +231,17 @@ export default function InterviewRoom() {
     setIsSpeaking(false);
     await completeSession(elapsedTime);
     
-    // Generate Report
+    let success = false;
     try {
       if (activeSessionId) {
+        // Backend now returns immediately with 202 Accepted
         await client.post(`/reports/generate/${activeSessionId}`, {
           transcript: transcriptRef.current
         });
+        success = true;
       }
     } catch(err) {
-      console.error('Error generating report:', err);
+      console.error('Error starting report generation:', err);
     }
     
     // Cleanup and redirect to report
@@ -218,19 +249,19 @@ export default function InterviewRoom() {
     resetGeminiService();
     setIsGeneratingReport(false);
     
-    if (activeSessionId) {
+    if (success && activeSessionId) {
       navigate(`/results/${activeSessionId}`);
     } else {
       navigate('/dashboard');
     }
     
-    // Clear config after a small delay to allow navigation to complete
     setTimeout(() => {
       clearConfig();
     }, 100);
   }, [elapsedTime, completeSession, navigate, activeSessionId, clearConfig]);
 
   const handleCancel = () => {
+    isInterviewActiveRef.current = false;
     stopCamera();
     resetGeminiService();
     navigate('/dashboard');
@@ -240,6 +271,11 @@ export default function InterviewRoom() {
   const toggleMute = () => {
     getGeminiService().setMuted(!isMuted);
     setIsMuted((m) => !m);
+  };
+
+  const toggleAiMute = () => {
+    getGeminiService().setAiMuted(!isAiMuted);
+    setIsAiMuted((m) => !m);
   };
 
   const toggleViewSwap = () => setIsViewSwapped((v) => !v);
@@ -348,6 +384,22 @@ export default function InterviewRoom() {
         )}
       </div>
 
+      {/* Global Captions Overlay */}
+      {interviewState === INTERVIEW_STATES.ACTIVE && (
+        <div className="global-captions-container">
+          {aiCaption && (
+            <div className="live-caption-overlay ai-caption-overlay">
+              <div className="live-caption-text ai-caption">{aiCaption}</div>
+            </div>
+          )}
+          {userCaption && (
+            <div className="live-caption-overlay user-caption-overlay">
+              <div className="live-caption-text user-caption">{userCaption}</div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Setup overlay */}
       {interviewState === INTERVIEW_STATES.SETUP && (
         <div className="room-overlay">
@@ -430,6 +482,26 @@ export default function InterviewRoom() {
                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            )}
+          </button>
+
+          <button
+            className={`btn btn-icon room-control-btn ${isAiMuted ? 'control-active-danger' : ''}`}
+            onClick={toggleAiMute}
+            title={isAiMuted ? 'Unmute AI' : 'Mute AI'}
+            id="mute-ai-btn"
+          >
+            {isAiMuted ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
               </svg>
             )}
           </button>

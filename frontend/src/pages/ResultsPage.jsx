@@ -13,6 +13,25 @@ export default function ResultsPage() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadingText, setLoadingText] = useState('Transcribing audio...');
+
+  useEffect(() => {
+    if (!report || report.status !== 'generating') return;
+    const texts = [
+      'Transcribing audio...',
+      'Analyzing performance...',
+      'Evaluating technical skills...',
+      'Assessing communication...',
+      'Generating feedback report...',
+      'Finalizing results...'
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      i = (i + 1) % texts.length;
+      setLoadingText(texts[i]);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [report?.status]);
 
   useEffect(() => {
     if (id === 'demo1' || id === 'demo2') {
@@ -20,7 +39,7 @@ export default function ResultsPage() {
       setReport({
         createdAt: isDemo1 ? new Date().toISOString() : new Date(Date.now() - 86400000 * 5).toISOString(),
         overallScore: isDemo1 ? 92 : 85,
-        status: 'Practice Session Complete',
+        status: 'completed',
         metrics: { communication: isDemo1 ? 90 : 80, technical: isDemo1 ? 95 : 90, cultural: 85 },
         interviewId: {
           role: isDemo1 ? 'Senior Product Designer' : 'Frontend Engineer',
@@ -51,20 +70,40 @@ export default function ResultsPage() {
       return;
     }
 
+    let pollInterval;
+
     const fetchReport = async () => {
       try {
         const res = await client.get(`/reports/interview/${id}`);
-        setReport(res.data.report);
+        const fetchedReport = res.data.report;
+        setReport(fetchedReport);
+        setLoading(false);
+
+        if (fetchedReport.status === 'generating') {
+          if (!pollInterval) {
+            pollInterval = setInterval(fetchReport, 3000);
+          }
+        } else {
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch report', err);
         setError('Could not load your interview report.');
-      } finally {
         setLoading(false);
+        if (pollInterval) clearInterval(pollInterval);
       }
     };
+    
     if (id) {
       fetchReport();
     }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [id]);
 
   const toggleQuestion = (qid) => {
@@ -79,9 +118,31 @@ export default function ResultsPage() {
     );
   }
 
+  if (report?.status === 'generating') {
+    return (
+      <div className="results-page" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center', color: '#fff' }}>
+        <div className="spinner" style={{ width: 48, height: 48, borderWidth: 4, margin: '0 auto 24px auto', borderColor: 'var(--primary-light)', borderTopColor: 'transparent' }} />
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', fontWeight: '500' }}>{loadingText}</h2>
+        <p style={{ color: 'var(--text-secondary)', maxWidth: '400px' }}>
+          Our AI is currently reviewing your responses and compiling a detailed feedback report. Please hold on.
+        </p>
+      </div>
+    );
+  }
+  
+  if (report?.status === 'failed') {
+     return (
+       <div className="results-page" style={{ padding: '2rem', textAlign: 'center', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+         <h2>Failed to generate report</h2>
+         <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', marginBottom: '1.5rem' }}>There was an error while AI was analyzing your interview. Please try again later.</p>
+         <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+       </div>
+     );
+  }
+
   if (error || !report) {
     return (
-      <div className="results-page" style={{ padding: '2rem', textAlign: 'center', color: '#fff' }}>
+      <div className="results-page" style={{ padding: '2rem', textAlign: 'center', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <h2>{error || 'Report not found'}</h2>
         <button className="btn btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: 16 }}>Back to Dashboard</button>
       </div>

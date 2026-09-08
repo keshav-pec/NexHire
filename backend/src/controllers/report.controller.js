@@ -5,25 +5,8 @@ const { GoogleGenAI } = require('@google/genai');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const generateReport = async (req, res, next) => {
+const processGeminiReport = async (interview, transcript, reportId) => {
   try {
-    const { interviewId } = req.params;
-    const { transcript } = req.body; // Array of { role, text }
-
-    if (!transcript || !Array.isArray(transcript)) {
-      return res.status(400).json({ success: false, message: 'Transcript is required' });
-    }
-
-    const interview = await Interview.findOne({ _id: interviewId, userId: req.user.id });
-    if (!interview) {
-      return res.status(404).json({ success: false, message: 'Interview not found' });
-    }
-
-    // Insert messages into DB in bulk, calculating tone for user messages would be done here or in Gemini prompt
-    // Wait, the user asked to save the "entire interview info about the conversation and tone at the end".
-    // We will ask Gemini to analyze tone and give us a QnA report in one go!
-    // But since the QnA report focuses on the candidate's answers, we can ask for tone per question or just in the summary.
-    // Let's formulate a prompt to generate the report JSON.
     const prompt = `
 You are an expert technical recruiter and interviewer. You have just completed a mock interview with a candidate.
 The target company is ${interview.company}, the role is ${interview.role}, and the candidate's skills are: ${interview.skills}.
@@ -79,25 +62,65 @@ Include the tone of the candidate's response in the "summary" field for each que
 
     const reportJson = JSON.parse(response.text);
 
-    // Save Messages to DB
+    // Update the existing placeholder report
+    await Report.findByIdAndUpdate(reportId, {
+      overallScore: reportJson.overallScore,
+      metrics: reportJson.metrics,
+      questions: reportJson.questions,
+      status: 'completed',
+    });
+
+  } catch (err) {
+    console.error('Error in background processGeminiReport:', err);
+    await Report.findByIdAndUpdate(reportId, {
+      status: 'failed',
+    });
+  }
+};
+
+const generateReport = async (req, res, next) => {
+  try {
+    const { interviewId } = req.params;
+    const { transcript } = req.body; // Array of { role, text }
+
+    if (!transcript || !Array.isArray(transcript)) {
+      return res.status(400).json({ success: false, message: 'Transcript is required' });
+    }
+
+    const interview = await Interview.findOne({ _id: interviewId, userId: req.user.id });
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    // Save Messages to DB immediately
     const messageDocs = transcript.map(t => ({
       interviewId,
       role: t.role,
       text: t.text,
-      // For simplicity we embed tone in the summary of the report, but we can leave tone empty here or populate it if we wanted.
     }));
     await Message.insertMany(messageDocs);
 
-    // Create Report
-    const report = await Report.create({
-      interviewId,
-      userId: req.user.id,
-      overallScore: reportJson.overallScore,
-      metrics: reportJson.metrics,
-      questions: reportJson.questions,
-    });
+    // Create a placeholder Report with status generating
+    let report = await Report.findOne({ interviewId, userId: req.user.id });
+    if (!report) {
+      report = await Report.create({
+        interviewId,
+        userId: req.user.id,
+        overallScore: 0,
+        status: 'generating',
+        metrics: { communication: 0, technical: 0, cultural: 0 },
+        questions: [],
+      });
+    } else {
+      report.status = 'generating';
+      await report.save();
+    }
 
-    res.status(200).json({ success: true, report });
+    // Start background processing
+    processGeminiReport(interview, transcript, report._id).catch(console.error);
+
+    // Respond immediately to prevent timeouts
+    res.status(202).json({ success: true, message: 'Report generation started', report });
 
   } catch (err) {
     console.error('Error generating report:', err);
